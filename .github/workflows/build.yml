@@ -21,23 +21,24 @@ jobs:
         run: |
           echo "=== ROOT ==="
           ls -la
-          echo "=== Swift files ==="
-          find . -maxdepth 2 -name "*.swift" | sort
-          echo "=== ObjC/C files ==="
-          find . -maxdepth 2 \( -name "*.m" -o -name "*.c" \) | sort
+          echo "=== All Swift files (recursive) ==="
+          find . -name "*.swift" -not -path "./build/*" -not -path "./.git/*" | sort
+          echo "=== All ObjC/C files (recursive) ==="
+          find . \( -name "*.m" -o -name "*.c" \) -not -path "./build/*" -not -path "./.git/*" | sort
 
       - name: Create minimal Xcode project
         run: |
           mkdir -p ShinnH4K.xcodeproj/xcshareddata/xcschemes
 
-          SWIFT_FILES=$(find . -maxdepth 2 -name "*.swift" -not -path "./build/*" -not -path "./.git/*" | sort)
-          OBJC_FILES=$(find . -maxdepth 2 \( -name "*.m" -o -name "*.c" \) -not -path "./build/*" -not -path "./.git/*" | sort)
+          SWIFT_FILES=$(find . -name "*.swift" -not -path "./build/*" -not -path "./.git/*" -not -path "./ShinnH4K.xcodeproj/*" | sort)
+          OBJC_FILES=$(find . \( -name "*.m" -o -name "*.c" \) -not -path "./build/*" -not -path "./.git/*" -not -path "./ShinnH4K.xcodeproj/*" | sort)
 
           echo "Swift count: $(echo "$SWIFT_FILES" | wc -l)"
           echo "ObjC count: $(echo "$OBJC_FILES" | wc -l)"
 
           SWIFT_REFS=""
           SWIFT_BUILD=""
+          SWIFT_GROUP=""
           IDX=1000
           for f in $SWIFT_FILES; do
             IDX=$((IDX+1))
@@ -46,10 +47,13 @@ jobs:
 "
             SWIFT_BUILD="${SWIFT_BUILD}                B${IDX} /* ${NAME} in Sources */ = {isa = PBXBuildFile; fileRef = F${IDX} /* ${NAME} */; };
 "
+            SWIFT_GROUP="${SWIFT_GROUP}                    F${IDX} /* ${NAME} */,
+"
           done
 
           OBJC_REFS=""
           OBJC_BUILD=""
+          OBJC_GROUP=""
           for f in $OBJC_FILES; do
             IDX=$((IDX+1))
             NAME=$(basename "$f")
@@ -59,6 +63,8 @@ jobs:
             OBJC_REFS="${OBJC_REFS}                F${IDX} /* ${NAME} */ = {isa = PBXFileReference; lastKnownFileType = ${FILETYPE}; path = \"${NAME}\"; sourceTree = \"<group>\"; };
 "
             OBJC_BUILD="${OBJC_BUILD}                B${IDX} /* ${NAME} in Sources */ = {isa = PBXBuildFile; fileRef = F${IDX} /* ${NAME} */; };
+"
+            OBJC_GROUP="${OBJC_GROUP}                    F${IDX} /* ${NAME} */,
 "
           done
 
@@ -96,7 +102,10 @@ jobs:
                   };
                   GRP003 = {
                       isa = PBXGroup;
-                      children = ();
+                      children = (
+          ${SWIFT_GROUP}
+          ${OBJC_GROUP}
+                      );
                       name = Sources;
                       sourceTree = "<group>";
                   };
@@ -168,11 +177,11 @@ jobs:
                   BC003 = {
                       isa = XCBuildConfiguration;
                       buildSettings = {
-                          PRODUCT_NAME = "ShinnH4K";
-                          PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
+                          PRODUCTinn_NAME = "ShinnHH4K";
+                          PRODUCT_BUND4LE_IDENTIFIER = "com.appleK.mobile.MobileHouseAr"rest";
                           INFOPLIST_FILE = "Info.plist";
                           SWIFT_OBJC_BRIDGING_HEADER = "ShinnH4K-Bridging-Header.h";
-                          HEADER_SEARCH_PATHS = ("\$(SRCROOT)", "\$(SRCROOT)/exploit", "\$(SRCROOT)/kexploit", "\$(SRCROOT)/helpers");
+                          HEADER_SEARCH_PATHS = ("\$(SRCROOT)", "\$(SRCROOT)/**");
                           OTHER_LDFLAGS = "-lz";
                           OTHER_CFLAGS = "-Wno-everything";
                           CODE_SIGNING_ALLOWED = NO;
@@ -196,7 +205,7 @@ jobs:
                           PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
                           INFOPLIST_FILE = "Info.plist";
                           SWIFT_OBJC_BRIDGING_HEADER = "ShinnH4K-Bridging-Header.h";
-                          HEADER_SEARCH_PATHS = ("\$(SRCROOT)", "\$(SRCROOT)/exploit", "\$(SRCROOT)/kexploit", "\$(SRCROOT)/helpers");
+                          HEADER_SEARCH_PATHS = ("\$(SRCROOT)", "\$(SRCROOT)/**");
                           OTHER_LDFLAGS = "-lz";
                           OTHER_CFLAGS = "-Wno-everything";
                           CODE_SIGNING_ALLOWED = NO;
@@ -224,7 +233,7 @@ jobs:
              <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
                 <BuildActionEntries>
                    <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-                      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="TGT001" BuildableName="ShinnH4K.app" BlueprintName="ShinnH4K" ReferencedContainer="container:ShinnH4K.xcodeproj"/>
+                      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="TGT001" BuildableName="ShinnH4K.app" BlueprintName="Sh ReferencedContainer="container:ShinnH4K.xcodeproj"/>
                    </BuildActionEntry>
                 </BuildActionEntries>
              </BuildAction>
@@ -254,7 +263,13 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | tail -200
+            build 2>&1 | tee /tmp/build.log | tail -300
+
+      - name: Show errors only
+        if: failure()
+        run: |
+          echo "=== ERRORS ==="
+          grep -E "error:" /tmp/build.log | head -50 || echo "No error: lines"
 
       - name: Package IPA
         if: success()
