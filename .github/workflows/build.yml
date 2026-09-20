@@ -69,7 +69,7 @@ jobs:
           done
 
           cat > ShinnH4K.xcodeproj/project.pbxproj <<PBXEOF
-          // !\$*UTF8*\$!
+          // !$*UTF8*$!
           {
               archiveVersion = 1;
               classes = {};
