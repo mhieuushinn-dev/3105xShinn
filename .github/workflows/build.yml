@@ -1,87 +1,55 @@
-name: Build ShinnH4K
+name: ShinnH4K
+options:
+  bundleIdPrefix: com.shinn
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  xcodeVersion: "15.4"
+  objectVersion: 56
+  developmentLanguage: en
+  generateEmptyDirectories: true
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main, master ]
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
 
-jobs:
-  build:
-    name: Build unsigned IPA
-    runs-on: macos-14
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Show repo structure
-        run: |
-          echo "=== ROOT ==="
-          ls -la
-          echo "=== exploit/ ==="
-          ls -la exploit/ 2>&1 || echo "MISSING exploit/"
-          echo "=== kexploit/ ==="
-          ls -la kexploit/ 2>&1 || echo "MISSING kexploit/"
-          echo "=== helpers/ ==="
-          ls -la helpers/ 2>&1 || echo "MISSING helpers/"
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate Xcode project
-        run: |
-          xcodegen generate
-          echo "=== After generate ==="
-          ls -la ShinnH4K.xcodeproj/ || echo "MISSING xcodeproj"
-          echo "=== pbxproj size ==="
-          wc -c ShinnH4K.xcodeproj/project.pbxproj || echo "MISSING pbxproj"
-
-      - name: Verify scheme
-        run: xcodebuild -list -project ShinnH4K.xcodeproj
-
-      - name: Build app
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project ShinnH4K.xcodeproj \
-            -scheme ShinnH4K \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
-            build 2>&1 | tail -200
-
-      - name: List build output
-        if: always()
-        run: |
-          echo "=== Build products ==="
-          find build/Build/Products -maxdepth 3 -type d 2>/dev/null || echo "No products"
-
-      - name: Package IPA
-        if: success()
-        run: |
-          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "No .app found"
-            find build/Build/Products -maxdepth 3 2>/dev/null
-            exit 1
-          fi
-          APP_NAME=$(basename "$APP_PATH" .app)
-          echo "Found: $APP_NAME"
-          mkdir -p Payload
-          cp -R "$APP_PATH" Payload/
-          rm -rf "Payload/${APP_NAME}.app/_CodeSignature" || true
-          rm -f  "Payload/${APP_NAME}.app/embedded.mobileprovision" || true
-          zip -qr ShinnH4K.ipa Payload
-          ls -la ShinnH4K.ipa
-
-      - name: Upload IPA
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ShinnH4K-ipa
-          path: ShinnH4K.ipa
-          retention-days: 30
+targets:
+  ShinnH4K:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: .
+        excludes:
+          - .github
+          - build
+          - Payload
+          - ShinnH4K.xcodeproj
+          - "*.md"
+          - "*.zip"
+          - "*.3105"
+          - "project.yml"
+          - "*.yml"
+    settings:
+      base:
+        PRODUCT_NAME: ShinnH4K
+        PRODUCT_BUNDLE_IDENTIFIER: com.apple.mobile.MobileHouseArrest
+        INFOPLIST_FILE: Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: ShinnH4K-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)"
+          - "$(SRCROOT)/exploit"
+          - "$(SRCROOT)/kexploit"
+          - "$(SRCROOT)/helpers"
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)"
+        OTHER_LDFLAGS: "-lz"
+        OTHER_CFLAGS: "-Wno-everything"
+        ENABLE_BITCODE: "NO"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
