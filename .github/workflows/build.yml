@@ -17,45 +17,75 @@ jobs:
     runs-on: macos-14
 
     steps:
-      # 1. Tải source code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Cài XcodeGen
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
       - name: Install XcodeGen
         run: |
           brew install xcodegen
 
-      # 3. Kiểm tra project.yml
-      - name: Check project
+      - name: Find project.yml
+        shell: bash
         run: |
           set -e
 
-          test -f project.yml
+          SPEC=$(find . -name "project.yml" \
+            -not -path "./.git/*" \
+            | head -n 1)
 
-          echo "Project configuration:"
-          cat project.yml
+          if [ -z "$SPEC" ]; then
+            echo "ERROR: project.yml not found"
+            exit 1
+          fi
 
-      # 4. Tạo Xcode project
+          echo "SPEC=$SPEC" >> "$GITHUB_ENV"
+          echo "Found: $SPEC"
+
       - name: Generate Xcode Project
+        shell: bash
         run: |
           set -e
 
-          rm -rf ShinnH4K.xcodeproj
+          SPEC_DIR=$(dirname "$SPEC")
+
+          cd "$SPEC_DIR"
 
           xcodegen generate \
             --spec project.yml
 
-          test -d ShinnH4K.xcodeproj
+          PROJECT=$(find . \
+            -maxdepth 1 \
+            -name "*.xcodeproj" \
+            | head -n 1)
 
-      # 5. Kiểm tra scheme
-      - name: Check Scheme
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: Xcode project not generated"
+            exit 1
+          fi
+
+          PROJECT_PATH="$SPEC_DIR/${PROJECT#./}"
+
+          echo "PROJECT_PATH=$PROJECT_PATH" \
+            >> "$GITHUB_ENV"
+
+          echo "Project: $PROJECT_PATH"
+
+      - name: Check Project and Schemes
+        shell: bash
         run: |
+          set -e
+
+          test -d "$PROJECT_PATH"
+
           xcodebuild \
-            -project ShinnH4K.xcodeproj \
+            -project "$PROJECT_PATH" \
             -list
 
-      # 6. Build app
       - name: Build App
         shell: bash
         run: |
@@ -63,9 +93,27 @@ jobs:
 
           mkdir -p build
 
+          SCHEME=$(xcodebuild \
+            -project "$PROJECT_PATH" \
+            -list \
+            | awk '
+              /Schemes:/ {found=1; next}
+              found && NF {
+                print $1
+                exit
+              }
+            ')
+
+          if [ -z "$SCHEME" ]; then
+            echo "ERROR: No scheme found"
+            exit 1
+          fi
+
+          echo "Using scheme: $SCHEME"
+
           xcodebuild \
-            -project ShinnH4K.xcodeproj \
-            -scheme ShinnH4K \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath "$PWD/build" \
@@ -74,26 +122,26 @@ jobs:
             build \
             | tee build/build.log
 
-      # 7. Tìm file app
       - name: Find App
+        shell: bash
         run: |
           set -e
 
-          APP_PATH=$(find \
-            build \
+          APP_PATH=$(find build \
             -type d \
             -name "*.app" \
             | head -n 1)
 
-          test -n "$APP_PATH"
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: App not found"
+            exit 1
+          fi
 
           echo "APP_PATH=$APP_PATH" \
             >> "$GITHUB_ENV"
 
-          echo "App found:"
-          echo "$APP_PATH"
+          echo "App: $APP_PATH"
 
-      # 8. Đóng gói IPA
       - name: Package IPA
         shell: bash
         run: |
@@ -102,12 +150,7 @@ jobs:
           rm -rf Payload
           mkdir -p Payload
 
-          cp -R \
-            "$APP_PATH" \
-            Payload/
-
-          rm -rf \
-            Payload/*.app/_CodeSignature
+          cp -R "$APP_PATH" Payload/
 
           zip -qry \
             ShinnH4K.ipa \
@@ -115,14 +158,12 @@ jobs:
 
           test -f ShinnH4K.ipa
 
-      # 9. Upload IPA
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: ShinnH4K-IPA
           path: ShinnH4K.ipa
 
-      # 10. Upload log nếu build lỗi
       - name: Upload Build Logs
         if: always()
         uses: actions/upload-artifact@v4
