@@ -334,3 +334,21 @@ void offsets_init(void) {
             VM_MAX_KERNEL_ADDRESS = 0xFFFFFE8FFFFFFFFF;
         }
     }
+if(isA15Above) {
+            off_thread_t_tro = 0x388;
+            off_thread_ctid = 0x438;
+            off_thread_mutex_lck_mtx_data = 0x3B0+8;
+            off_thread_ast = 0x3AC;
+            off_thread_task_threads_next = 0x378;
+        }
+
+        if(isA17Above) {
+            off_thread_t_tro = 0x3D8;
+if(isA10) {
+            off_thread_t_tro = 0x3A0;
+            off_thread_ctid = 0x450;
+            off_thread_mutex_lck_mtx_data = 0x3C8+8;
+            off_thread_ast = 0x3C4;
+            off_thread_task_threads_next = 0x390;
+        }
+    }
