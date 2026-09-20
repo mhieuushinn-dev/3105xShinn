@@ -1,0 +1,132 @@
+name: Build ShinnH4K IPA
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-14
+
+    steps:
+      # 1. Tải source code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Cài XcodeGen
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+
+      # 3. Kiểm tra project.yml
+      - name: Check project
+        run: |
+          set -e
+
+          test -f project.yml
+
+          echo "Project configuration:"
+          cat project.yml
+
+      # 4. Tạo Xcode project
+      - name: Generate Xcode Project
+        run: |
+          set -e
+
+          rm -rf ShinnH4K.xcodeproj
+
+          xcodegen generate \
+            --spec project.yml
+
+          test -d ShinnH4K.xcodeproj
+
+      # 5. Kiểm tra scheme
+      - name: Check Scheme
+        run: |
+          xcodebuild \
+            -project ShinnH4K.xcodeproj \
+            -list
+
+      # 6. Build app
+      - name: Build App
+        shell: bash
+        run: |
+          set -o pipefail
+
+          mkdir -p build
+
+          xcodebuild \
+            -project ShinnH4K.xcodeproj \
+            -scheme ShinnH4K \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build \
+            | tee build/build.log
+
+      # 7. Tìm file app
+      - name: Find App
+        run: |
+          set -e
+
+          APP_PATH=$(find \
+            build \
+            -type d \
+            -name "*.app" \
+            | head -n 1)
+
+          test -n "$APP_PATH"
+
+          echo "APP_PATH=$APP_PATH" \
+            >> "$GITHUB_ENV"
+
+          echo "App found:"
+          echo "$APP_PATH"
+
+      # 8. Đóng gói IPA
+      - name: Package IPA
+        shell: bash
+        run: |
+          set -e
+
+          rm -rf Payload
+          mkdir -p Payload
+
+          cp -R \
+            "$APP_PATH" \
+            Payload/
+
+          rm -rf \
+            Payload/*.app/_CodeSignature
+
+          zip -qry \
+            ShinnH4K.ipa \
+            Payload
+
+          test -f ShinnH4K.ipa
+
+      # 9. Upload IPA
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShinnH4K-IPA
+          path: ShinnH4K.ipa
+
+      # 10. Upload log nếu build lỗi
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShinnH4K-Build-Logs
+          path: build/
+          if-no-files-found: warn
