@@ -3,8 +3,7 @@ name: Build ShinnH4K
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -13,30 +12,31 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Show files
+      - name: Show repo structure
         run: |
+          echo "=== ROOT ==="
           ls -la
-          ls -la exploit/ 2>&1 || true
-          ls -la kexploit/ 2>&1 || true
+          echo "=== ShinnH4K-Sources/ ==="
+          ls -la ShinnH4K-Sources/ 2>&1 || echo "MISSING ShinnH4K-Sources/"
 
-      - name: Install XcodeGen
+      - name: Install XcodeGen 2.38.0
         run: |
+          cd /tmp
           curl -L -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
           unzip -q xcodegen.zip
-          sudo mv xcodegen/bin/xcodegen /usr/local/bin/xcodegen
+          sudo mv /tmp/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
           sudo chmod +x /usr/local/bin/xcodegen
           xcodegen --version
 
       - name: Generate project
         run: |
           xcodegen generate
-          ls -la ShinnH4K.xcodeproj/ || echo "MISSING"
-          head -5 ShinnH4K.xcodeproj/project.pbxproj || echo "MISSING pbxproj"
+          ls -la ShinnH4K.xcodeproj/
+          head -20 ShinnH4K.xcodeproj/project.pbxproj
 
-      - name: Verify
+      - name: Verify scheme
         run: xcodebuild -list -project ShinnH4K.xcodeproj
 
       - name: Build
@@ -50,16 +50,27 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -200
 
-      - name: Package
+      - name: Package IPA
+        if: success()
         run: |
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found"
+            find build/Build/Products -maxdepth 3
+            exit 1
+          fi
+          APP_NAME=$(basename "$APP_PATH" .app)
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/ShinnH4K.app Payload/
+          cp -R "$APP_PATH" Payload/
+          rm -rf "Payload/${APP_NAME}.app/_CodeSignature" || true
           zip -qr ShinnH4K.ipa Payload
           ls -la ShinnH4K.ipa
 
-      - name: Upload
+      - name: Upload IPA
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ShinnH4K-ipa
